@@ -15,6 +15,6 @@ httpx==0.28.1
 anyio==4.7.0
 
 # ── Linting / Formatting ───────────────────────────────────────────────────────
-ruff==0.8.4
+ruff==0.15.17
 bandit==1.8.0
 asgi-lifespan==2.1.0
