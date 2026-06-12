@@ -16,5 +16,5 @@ anyio==4.7.0
 
 # ── Linting / Formatting ───────────────────────────────────────────────────────
 ruff==0.8.4
-bandit==1.8.0
+bandit==1.9.4
 asgi-lifespan==2.1.0
