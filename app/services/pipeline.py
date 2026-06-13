@@ -22,6 +22,11 @@ logger = logging.getLogger(__name__)
 _executor = ThreadPoolExecutor(max_workers=settings.PIPELINE_MAX_WORKERS)
 
 
+def _sanitize_for_log(value: object) -> str:
+    """Return a log-safe representation by stripping line-break characters."""
+    return str(value).replace("\r", "").replace("\n", "")
+
+
 async def process_batch(batch: TelemetryBatch) -> PipelineResult:
     """
     Async pipeline entry point.
@@ -29,8 +34,9 @@ async def process_batch(batch: TelemetryBatch) -> PipelineResult:
     """
     start = time.perf_counter()
     loop = asyncio.get_event_loop()
+    safe_batch_id = _sanitize_for_log(batch.batch_id)
 
-    logger.info(f"Processing batch {batch.batch_id} " f"({len(batch.points)} points)")
+    logger.info(f"Processing batch {safe_batch_id} " f"({len(batch.points)} points)")
 
     # Run quality and detection concurrently in threads
     quality_future = loop.run_in_executor(
@@ -61,7 +67,7 @@ async def process_batch(batch: TelemetryBatch) -> PipelineResult:
     )
 
     logger.info(
-        f"Batch {batch.batch_id} done in {elapsed_ms:.1f}ms — "
+        f"Batch {safe_batch_id} done in {elapsed_ms:.1f}ms — "
         f"{len(anomalies)} anomalies, quality={quality_report.quality_flag.value}"
     )
     return result
