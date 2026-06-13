@@ -34,6 +34,7 @@ def setup_logging() -> None:
     if settings.ENVIRONMENT == "production":
         try:
             import json_log_formatter  # type: ignore[import]
+
             formatter = json_log_formatter.JSONFormatter()
         except ImportError:
             formatter = logging.Formatter(

@@ -92,13 +92,10 @@ async def reports_summary(
         await session.execute(select(func.count(QualityReportORM.batch_id)))
     ).scalar_one()
 
-    total_anomalies = (
-        await session.execute(select(func.count(AnomalyORM.id)))
-    ).scalar_one()
+    total_anomalies = (await session.execute(select(func.count(AnomalyORM.id)))).scalar_one()
 
     flag_rows = await session.execute(
-        select(QualityReportORM.quality_flag, func.count())
-        .group_by(QualityReportORM.quality_flag)
+        select(QualityReportORM.quality_flag, func.count()).group_by(QualityReportORM.quality_flag)
     )
     flag_counts = {row[0]: row[1] for row in flag_rows.all()}
 

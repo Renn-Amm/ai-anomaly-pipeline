@@ -15,9 +15,7 @@ from app.main import app
 @pytest_asyncio.fixture
 async def client():
     async with LifespanManager(app):
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as ac:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             yield ac
 
 
@@ -33,16 +31,19 @@ def _make_batch(n: int = 10, inject_anomaly: bool = False) -> dict:
         for i in range(n)
     ]
     if inject_anomaly:
-        points.append({
-            "metric_name": "cpu_usage",
-            "value": 99999.0,
-            "timestamp": (base_time + timedelta(seconds=n * 30)).isoformat(),
-            "source": "server-01",
-        })
+        points.append(
+            {
+                "metric_name": "cpu_usage",
+                "value": 99999.0,
+                "timestamp": (base_time + timedelta(seconds=n * 30)).isoformat(),
+                "source": "server-01",
+            }
+        )
     return {"points": points}
 
 
 # ── Health ─────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_health_check(client: AsyncClient):
@@ -59,6 +60,7 @@ async def test_readiness_check(client: AsyncClient):
 
 
 # ── Telemetry ingestion ────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_ingest_clean_batch(client: AsyncClient):
@@ -99,10 +101,16 @@ async def test_invalid_metric_name_rejected(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_too_many_tags_rejected(client: AsyncClient):
-    batch = {"points": [{
-        "metric_name": "cpu", "value": 1.0, "source": "s",
-        "tags": {f"key{i}": "v" for i in range(25)},
-    }]}
+    batch = {
+        "points": [
+            {
+                "metric_name": "cpu",
+                "value": 1.0,
+                "source": "s",
+                "tags": {f"key{i}": "v" for i in range(25)},
+            }
+        ]
+    }
     assert (await client.post("/api/v1/telemetry", json=batch)).status_code == 422
 
 
@@ -120,6 +128,7 @@ async def test_no_sensitive_response_headers(client: AsyncClient):
 
 
 # ── Persistence queries ────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_anomalies_persisted_and_queryable(client: AsyncClient):
@@ -176,6 +185,7 @@ async def test_reports_summary(client: AsyncClient):
 
 # ── Auth enforcement ───────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_telemetry_open_when_no_api_keys_configured(client: AsyncClient):
     """Default test config: API_KEYS=[] so no auth header needed."""
@@ -183,19 +193,17 @@ async def test_telemetry_open_when_no_api_keys_configured(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_telemetry_rejects_missing_key_when_configured(
-    client: AsyncClient, monkeypatch
-):
+async def test_telemetry_rejects_missing_key_when_configured(client: AsyncClient, monkeypatch):
     from app.core import security
+
     monkeypatch.setattr(security.settings, "API_KEYS", ["test-key-123"])
     assert (await client.post("/api/v1/telemetry", json=_make_batch(5))).status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_telemetry_accepts_valid_key_when_configured(
-    client: AsyncClient, monkeypatch
-):
+async def test_telemetry_accepts_valid_key_when_configured(client: AsyncClient, monkeypatch):
     from app.core import security
+
     monkeypatch.setattr(security.settings, "API_KEYS", ["test-key-123"])
     r = await client.post(
         "/api/v1/telemetry",

@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     @classmethod
     def use_memory_db_in_tests(cls, v: str) -> str:
         import os
+
         if os.environ.get("ENVIRONMENT") == "test":
             return "sqlite+aiosqlite:///:memory:"
         return v
@@ -77,9 +78,7 @@ class Settings(BaseSettings):
                     "otherwise the API accepts unauthenticated writes."
                 )
             if "*" in self.ALLOWED_HOSTS or "*" in self.ALLOWED_ORIGINS:
-                raise ValueError(
-                    "ALLOWED_HOSTS / ALLOWED_ORIGINS cannot be '*' in production."
-                )
+                raise ValueError("ALLOWED_HOSTS / ALLOWED_ORIGINS cannot be '*' in production.")
         return self
 
     model_config = {"env_file": ".env", "case_sensitive": True}

@@ -30,10 +30,7 @@ async def process_batch(batch: TelemetryBatch) -> PipelineResult:
     start = time.perf_counter()
     loop = asyncio.get_event_loop()
 
-    logger.info(
-        f"Processing batch {batch.batch_id} "
-        f"({len(batch.points)} points)"
-    )
+    logger.info(f"Processing batch {batch.batch_id} " f"({len(batch.points)} points)")
 
     # Run quality and detection concurrently in threads
     quality_future = loop.run_in_executor(
@@ -49,9 +46,7 @@ async def process_batch(batch: TelemetryBatch) -> PipelineResult:
         batch.batch_id,
     )
 
-    quality_report, anomalies = await asyncio.gather(
-        quality_future, detection_future
-    )
+    quality_report, anomalies = await asyncio.gather(quality_future, detection_future)
 
     elapsed_ms = (time.perf_counter() - start) * 1000
 

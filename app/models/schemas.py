@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 # ── Enums ──────────────────────────────────────────────────────────────────────
 
+
 class AnomalyType(StrEnum):
     ZSCORE = "zscore"
     IQR = "iqr"
@@ -48,9 +49,7 @@ class TelemetryPoint(BaseModel):
 
     metric_name: str = Field(..., description="Metric identifier")
     value: float = Field(..., description="Numeric reading")
-    timestamp: datetime = Field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     source: str = Field(..., min_length=1, max_length=64)
     tags: dict[str, str] = Field(default_factory=dict)
 
@@ -58,9 +57,7 @@ class TelemetryPoint(BaseModel):
     @classmethod
     def validate_metric_name(cls, v: str) -> str:
         if not _SAFE_METRIC_NAME.match(v):
-            raise ValueError(
-                "metric_name must be 1–128 chars: letters, digits, _, ., -"
-            )
+            raise ValueError("metric_name must be 1–128 chars: letters, digits, _, ., -")
         return v
 
     @field_validator("tags")
@@ -81,9 +78,7 @@ class TelemetryBatch(BaseModel):
 
     batch_id: UUID = Field(default_factory=uuid4)
     points: list[TelemetryPoint] = Field(..., min_length=1, max_length=10_000)
-    submitted_at: datetime = Field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    submitted_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @model_validator(mode="after")
     def check_batch_not_empty(self) -> TelemetryBatch:
@@ -93,6 +88,7 @@ class TelemetryBatch(BaseModel):
 
 
 # ── Output models ──────────────────────────────────────────────────────────────
+
 
 class AnomalyRecord(BaseModel):
     """Detected anomaly with full audit trail."""
@@ -121,9 +117,7 @@ class DataQualityReport(BaseModel):
     duplicate_ratio: float
     quality_flag: QualityFlag
     issues: list[str] = Field(default_factory=list)
-    processed_at: datetime = Field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    processed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class PipelineResult(BaseModel):

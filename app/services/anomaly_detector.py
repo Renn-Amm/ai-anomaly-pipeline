@@ -104,9 +104,7 @@ def detect_iqr_anomalies(
     for point in points:
         if point.value < lower or point.value > upper:
             dev = (
-                (point.value - upper) / iqr
-                if point.value > upper
-                else (lower - point.value) / iqr
+                (point.value - upper) / iqr if point.value > upper else (lower - point.value) / iqr
             )
             anomalies.append(
                 AnomalyRecord(
@@ -155,8 +153,7 @@ def detect_out_of_range(
                     anomaly_type=AnomalyType.OUT_OF_RANGE,
                     severity=Severity.HIGH,
                     description=(
-                        f"Value {point.value} outside allowed range "
-                        f"[{min_val}, {max_val}]"
+                        f"Value {point.value} outside allowed range " f"[{min_val}, {max_val}]"
                     ),
                     resolution_hint=(
                         "Check sensor hardware for saturation or failure. "
@@ -194,8 +191,7 @@ def detect_timestamp_gaps(
                     severity=Severity.MEDIUM if gap < 900 else Severity.HIGH,
                     score=round(gap, 2),
                     description=(
-                        f"Gap of {gap:.0f}s between readings "
-                        f"(threshold: {max_gap_seconds}s)"
+                        f"Gap of {gap:.0f}s between readings " f"(threshold: {max_gap_seconds}s)"
                     ),
                     resolution_hint=(
                         "Check network connectivity and producer health. "

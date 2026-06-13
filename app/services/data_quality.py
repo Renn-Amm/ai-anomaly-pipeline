@@ -25,8 +25,7 @@ def assess_data_quality(
     issues: list[str] = []
 
     null_count = sum(
-        1 for p in points
-        if p.value is None or math.isnan(p.value) or math.isinf(p.value)
+        1 for p in points if p.value is None or math.isnan(p.value) or math.isinf(p.value)
     )
     null_ratio = null_count / total if total else 0.0
 
@@ -41,7 +40,8 @@ def assess_data_quality(
     dup_ratio = dup_count / total if total else 0.0
 
     oor_count = sum(
-        1 for p in points
+        1
+        for p in points
         if p.value < settings.VALUE_RANGE_MIN or p.value > settings.VALUE_RANGE_MAX
     )
 
@@ -58,10 +58,7 @@ def assess_data_quality(
     if oor_count > 0:
         issues.append(f"{oor_count} value(s) outside allowed range")
 
-    if (
-        null_ratio > settings.MAX_NULL_RATIO * 2
-        or dup_ratio > settings.MAX_DUPLICATE_RATIO * 2
-    ):
+    if null_ratio > settings.MAX_NULL_RATIO * 2 or dup_ratio > settings.MAX_DUPLICATE_RATIO * 2:
         flag = QualityFlag.FAIL
     elif issues:
         flag = QualityFlag.WARN
@@ -70,7 +67,10 @@ def assess_data_quality(
 
     logger.info(
         "Quality: flag=%s nulls=%d dups=%d oor=%d",
-        flag.value, null_count, dup_count, oor_count,
+        flag.value,
+        null_count,
+        dup_count,
+        oor_count,
     )
     return DataQualityReport(
         batch_id=batch_id,

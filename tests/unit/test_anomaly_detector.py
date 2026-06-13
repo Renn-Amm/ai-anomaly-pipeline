@@ -15,25 +15,20 @@ from app.services.anomaly_detector import (
 )
 
 
-def make_point(
-    value: float, metric: str = "cpu", offset_seconds: int = 0
-) -> TelemetryPoint:
+def make_point(value: float, metric: str = "cpu", offset_seconds: int = 0) -> TelemetryPoint:
     return TelemetryPoint(
         metric_name=metric,
         value=value,
-        timestamp=datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
-        + timedelta(seconds=offset_seconds),
+        timestamp=datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC) + timedelta(seconds=offset_seconds),
         source="test-sensor",
     )
 
 
 def normal_points(n: int = 100) -> list[TelemetryPoint]:
     import random
+
     random.seed(7)
-    return [
-        make_point(50.0 + random.gauss(0, 0.3), offset_seconds=i * 10)
-        for i in range(n)
-    ]
+    return [make_point(50.0 + random.gauss(0, 0.3), offset_seconds=i * 10) for i in range(n)]
 
 
 class TestZScoreDetection:
