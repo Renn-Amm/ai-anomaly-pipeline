@@ -1,102 +1,90 @@
 """
-Persistence layer — async SQLAlchemy with SQLite (swap DATABASE_URL for Postgres).
+Application configuration — reads from environment variables.
+Never hardcode secrets; use .env locally and GitHub Secrets in CI/CD.
 """
 
-from __future__ import annotations
+from functools import lru_cache
 
-from datetime import UTC, datetime
-
-from sqlalchemy import JSON, Column, DateTime, Float, Integer, String
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import declarative_base
-from sqlalchemy.pool import StaticPool
-
-from app.core.config import get_settings
-
-settings = get_settings()
-Base = declarative_base()
-
-_engine_kwargs: dict = {"echo": False}
-if ":memory:" in settings.DATABASE_URL:
-    _engine_kwargs["poolclass"] = StaticPool
-    _engine_kwargs["connect_args"] = {"check_same_thread": False}
-
-engine = create_async_engine(settings.DATABASE_URL, **_engine_kwargs)
-async_session = async_sessionmaker(engine, expire_on_commit=False)
+from pydantic import field_validator, model_validator
+from pydantic_settings import BaseSettings
 
 
-class AnomalyORM(Base):
-    __tablename__ = "anomalies"
+class Settings(BaseSettings):
+    # ── Application ────────────────────────────────────────────────────────────
+    APP_NAME: str = "AI Anomaly Detection Pipeline"
+    ENVIRONMENT: str = "development"
+    DEBUG: bool = False
+    LOG_LEVEL: str = "INFO"
 
-    id = Column(String(36), primary_key=True)
-    batch_id = Column(String(36), index=True, nullable=False)
-    metric_name = Column(String(128), index=True, nullable=False)
-    value = Column(Float, nullable=False)
-    timestamp = Column(DateTime, nullable=False)
-    anomaly_type = Column(String(32), nullable=False)
-    severity = Column(String(16), nullable=False, index=True)
-    score = Column(Float, nullable=True)
-    description = Column(String(512), nullable=False)
-    resolution_hint = Column(String(512), nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
+    # ── Security ───────────────────────────────────────────────────────────────
+    ALLOWED_HOSTS: list[str] = ["localhost", "127.0.0.1"]
+    ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"]
+    SECRET_KEY: str = "change-me-in-production-use-256-bit-random"  # noqa: S105
+    API_KEYS: list[str] = []  # empty = auth disabled (dev only)
+    RATE_LIMIT_PER_MINUTE: int = 60
+
+    # ── Pipeline ───────────────────────────────────────────────────────────────
+    ANOMALY_ZSCORE_THRESHOLD: float = 3.0
+    ANOMALY_IQR_MULTIPLIER: float = 1.5
+    PIPELINE_BATCH_SIZE: int = 1000
+    PIPELINE_MAX_WORKERS: int = 4
+
+    # ── Data Quality ───────────────────────────────────────────────────────────
+    MAX_NULL_RATIO: float = 0.05
+    MAX_DUPLICATE_RATIO: float = 0.02
+    VALUE_RANGE_MIN: float = -1_000_000.0
+    VALUE_RANGE_MAX: float = 1_000_000.0
+
+    # ── Storage ────────────────────────────────────────────────────────────────
+    DATABASE_URL: str = "sqlite+aiosqlite:///./pipeline.db"
+
+    @field_validator("ENVIRONMENT")
+    @classmethod
+    def validate_environment(cls, v: str) -> str:
+        allowed = {"development", "staging", "production", "test"}
+        if v not in allowed:
+            raise ValueError(f"ENVIRONMENT must be one of {allowed}")
+        return v
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def use_memory_db_in_tests(cls, v: str) -> str:
+        import os
+        if os.environ.get("ENVIRONMENT") == "test":
+            return "sqlite+aiosqlite:///:memory:"
+        return v
+
+    @field_validator("ANOMALY_ZSCORE_THRESHOLD")
+    @classmethod
+    def validate_zscore(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError("ANOMALY_ZSCORE_THRESHOLD must be positive")
+        return v
+
+    @model_validator(mode="after")
+    def validate_production_security(self) -> "Settings":
+        """Fail fast at startup if production is misconfigured."""
+        if self.ENVIRONMENT == "production":
+            placeholder = "change-me-in-production-use-256-bit-random"
+            if self.SECRET_KEY == placeholder:
+                raise ValueError(
+                    "SECRET_KEY must be changed in production. "
+                    'Run: python -c "import secrets; print(secrets.token_hex(32))"'
+                )
+            if not self.API_KEYS:
+                raise ValueError(
+                    "API_KEYS must be set in production — "
+                    "otherwise the API accepts unauthenticated writes."
+                )
+            if "*" in self.ALLOWED_HOSTS or "*" in self.ALLOWED_ORIGINS:
+                raise ValueError(
+                    "ALLOWED_HOSTS / ALLOWED_ORIGINS cannot be '*' in production."
+                )
+        return self
+
+    model_config = {"env_file": ".env", "case_sensitive": True}
 
 
-class QualityReportORM(Base):
-    __tablename__ = "quality_reports"
-
-    batch_id = Column(String(36), primary_key=True)
-    total_points = Column(Integer, nullable=False)
-    null_count = Column(Integer, nullable=False)
-    duplicate_count = Column(Integer, nullable=False)
-    out_of_range_count = Column(Integer, nullable=False)
-    null_ratio = Column(Float, nullable=False)
-    duplicate_ratio = Column(Float, nullable=False)
-    quality_flag = Column(String(8), nullable=False, index=True)
-    issues = Column(JSON, nullable=False, default=list)
-    processed_at = Column(DateTime, default=lambda: datetime.now(UTC))
-
-
-async def init_db() -> None:
-    """Create tables on startup — idempotent."""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-
-async def get_session() -> AsyncSession:  # type: ignore[misc]
-    """FastAPI dependency — yields an async DB session."""
-    async with async_session() as session:
-        yield session
-
-
-async def save_pipeline_result(session: AsyncSession, result) -> None:
-    """Persist anomalies + quality report from a PipelineResult."""
-    for a in result.anomalies:
-        session.add(
-            AnomalyORM(
-                id=str(a.anomaly_id),
-                batch_id=str(a.batch_id),
-                metric_name=a.metric_name,
-                value=a.value,
-                timestamp=a.timestamp,
-                anomaly_type=a.anomaly_type.value,
-                severity=a.severity.value,
-                score=a.score,
-                description=a.description,
-                resolution_hint=a.resolution_hint,
-            )
-        )
-    qr = result.quality_report
-    session.add(
-        QualityReportORM(
-            batch_id=str(qr.batch_id),
-            total_points=qr.total_points,
-            null_count=qr.null_count,
-            duplicate_count=qr.duplicate_count,
-            out_of_range_count=qr.out_of_range_count,
-            null_ratio=qr.null_ratio,
-            duplicate_ratio=qr.duplicate_ratio,
-            quality_flag=qr.quality_flag.value,
-            issues=qr.issues,
-        )
-    )
-    await session.commit()
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
