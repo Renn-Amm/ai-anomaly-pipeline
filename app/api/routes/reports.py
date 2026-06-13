@@ -1,12 +1,13 @@
 """Data quality report endpoints — backed by SQLite/Postgres."""
 
+from __future__ import annotations
+
 from datetime import datetime
-from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AnomalyORM, QualityReportORM, get_session
@@ -24,7 +25,7 @@ class QualityReportOut(BaseModel):
     null_ratio: float
     duplicate_ratio: float
     quality_flag: QualityFlag
-    issues: List[str]
+    issues: list[str]
     processed_at: datetime
 
     model_config = {"from_attributes": True}
@@ -32,7 +33,7 @@ class QualityReportOut(BaseModel):
 
 class QualityReportListResponse(BaseModel):
     total: int
-    items: List[QualityReportOut]
+    items: list[QualityReportOut]
 
 
 class SummaryResponse(BaseModel):
@@ -48,13 +49,20 @@ async def list_reports(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
-):
-    """Retrieve data quality reports for previously processed batches, newest first."""
-    stmt = select(QualityReportORM).order_by(QualityReportORM.processed_at.desc())
+) -> QualityReportListResponse:
+    """Retrieve quality reports, newest first."""
+    filters = []
     if flag is not None:
-        stmt = stmt.where(QualityReportORM.quality_flag == flag.value)
+        filters.append(QualityReportORM.quality_flag == flag.value)
 
-    total = len((await session.execute(stmt)).scalars().all())
+    count_stmt = select(func.count(QualityReportORM.batch_id))
+    for f in filters:
+        count_stmt = count_stmt.where(f)
+    total = (await session.execute(count_stmt)).scalar_one()
+
+    stmt = select(QualityReportORM).order_by(QualityReportORM.processed_at.desc())
+    for f in filters:
+        stmt = stmt.where(f)
     rows = (await session.execute(stmt.limit(limit).offset(offset))).scalars().all()
 
     items = [
@@ -76,8 +84,10 @@ async def list_reports(
 
 
 @router.get("/reports/summary", response_model=SummaryResponse)
-async def reports_summary(session: AsyncSession = Depends(get_session)):
-    """Aggregate counts across all processed batches — useful for dashboards."""
+async def reports_summary(
+    session: AsyncSession = Depends(get_session),
+) -> SummaryResponse:
+    """Aggregate counts across all batches — useful for dashboards."""
     total_batches = (
         await session.execute(select(func.count(QualityReportORM.batch_id)))
     ).scalar_one()
@@ -93,8 +103,7 @@ async def reports_summary(session: AsyncSession = Depends(get_session)):
     flag_counts = {row[0]: row[1] for row in flag_rows.all()}
 
     severity_rows = await session.execute(
-        select(AnomalyORM.severity, func.count())
-        .group_by(AnomalyORM.severity)
+        select(AnomalyORM.severity, func.count()).group_by(AnomalyORM.severity)
     )
     severity_counts = {row[0]: row[1] for row in severity_rows.all()}
 

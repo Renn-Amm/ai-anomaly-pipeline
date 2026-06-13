@@ -1,7 +1,8 @@
 """Unit tests — Pydantic model validation."""
 
+from __future__ import annotations
+
 import pytest
-from datetime import datetime
 from pydantic import ValidationError
 
 from app.models.schemas import TelemetryBatch, TelemetryPoint
@@ -31,18 +32,15 @@ class TestTelemetryPointValidation:
 
     def test_extra_fields_rejected(self):
         with pytest.raises(ValidationError):
-            TelemetryPoint(
-                metric_name="cpu", value=1.0, source="s", unknown_field="bad"
-            )
+            TelemetryPoint(metric_name="cpu", value=1.0, source="s", unknown_field="bad")
 
 
 class TestTelemetryBatchValidation:
-    def _point(self):
+    def _point(self) -> dict:
         return {"metric_name": "cpu", "value": 1.0, "source": "s"}
 
     def test_valid_batch_accepted(self):
-        batch = TelemetryBatch(points=[self._point()])
-        assert len(batch.points) == 1
+        assert len(TelemetryBatch(points=[self._point()]).points) == 1
 
     def test_empty_batch_rejected(self):
         with pytest.raises(ValidationError):

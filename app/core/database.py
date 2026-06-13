@@ -1,18 +1,14 @@
 """
 Persistence layer — async SQLAlchemy with SQLite (swap DATABASE_URL for Postgres).
-Stores anomalies and quality reports so /api/v1/anomalies and /api/v1/reports
-return real historical data instead of stubs.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
-from uuid import UUID
+from datetime import UTC, datetime
 
 from sqlalchemy import JSON, Column, DateTime, Float, Integer, String
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
-
 from sqlalchemy.pool import StaticPool
 
 from app.core.config import get_settings
@@ -20,7 +16,7 @@ from app.core.config import get_settings
 settings = get_settings()
 Base = declarative_base()
 
-_engine_kwargs = {"echo": False}
+_engine_kwargs: dict = {"echo": False}
 if ":memory:" in settings.DATABASE_URL:
     _engine_kwargs["poolclass"] = StaticPool
     _engine_kwargs["connect_args"] = {"check_same_thread": False}
@@ -42,7 +38,7 @@ class AnomalyORM(Base):
     score = Column(Float, nullable=True)
     description = Column(String(512), nullable=False)
     resolution_hint = Column(String(512), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
 
 
 class QualityReportORM(Base):
@@ -57,16 +53,16 @@ class QualityReportORM(Base):
     duplicate_ratio = Column(Float, nullable=False)
     quality_flag = Column(String(8), nullable=False, index=True)
     issues = Column(JSON, nullable=False, default=list)
-    processed_at = Column(DateTime, default=datetime.utcnow)
+    processed_at = Column(DateTime, default=lambda: datetime.now(UTC))
 
 
 async def init_db() -> None:
-    """Create tables on startup. Safe to call repeatedly (idempotent)."""
+    """Create tables on startup — idempotent."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
 
-async def get_session() -> AsyncSession:
+async def get_session() -> AsyncSession:  # type: ignore[misc]
     """FastAPI dependency — yields an async DB session."""
     async with async_session() as session:
         yield session
@@ -89,7 +85,6 @@ async def save_pipeline_result(session: AsyncSession, result) -> None:
                 resolution_hint=a.resolution_hint,
             )
         )
-
     qr = result.quality_report
     session.add(
         QualityReportORM(

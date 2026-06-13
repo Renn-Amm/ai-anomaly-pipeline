@@ -11,8 +11,12 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 
-from app.api.routes import health, telemetry, anomalies, reports
+from app.api.routes import anomalies, health, reports, telemetry
 from app.core.config import get_settings
 from app.core.database import init_db
 from app.core.logging_config import setup_logging
@@ -20,6 +24,9 @@ from app.core.logging_config import setup_logging
 settings = get_settings()
 setup_logging()
 logger = logging.getLogger(__name__)
+
+rate_limit = f"{settings.RATE_LIMIT_PER_MINUTE}/minute"
+limiter = Limiter(key_func=get_remote_address, default_limits=[rate_limit])
 
 
 @asynccontextmanager
@@ -43,6 +50,12 @@ app = FastAPI(
     redoc_url="/redoc" if settings.ENVIRONMENT != "production" else None,
     lifespan=lifespan,
 )
+
+# ── Rate Limiting ──────────────────────────────────────────────────────────────
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 # ── Middleware ─────────────────────────────────────────────────────────────────
 

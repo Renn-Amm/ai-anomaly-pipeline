@@ -1,20 +1,22 @@
 # ── Runtime ────────────────────────────────────────────────────────────────────
-fastapi==0.115.5
-uvicorn[standard]==0.32.1
+fastapi==0.136.3
+uvicorn[standard]==0.34.3
 pydantic==2.10.3
 pydantic-settings==2.6.1
-python-multipart==0.0.20
+python-multipart==0.0.27
 sqlalchemy==2.0.36
 aiosqlite==0.20.0
+slowapi==0.1.9
 
 # ── Dev / Test ─────────────────────────────────────────────────────────────────
-pytest==8.3.4
-pytest-asyncio==0.24.0
+pytest==9.0.3
+pytest-asyncio==1.4.0
 pytest-cov==6.0.0
 httpx==0.28.1
 anyio==4.7.0
+asgi-lifespan==2.1.0
 
-# ── Linting / Formatting ───────────────────────────────────────────────────────
+# ── Linting / Security ────────────────────────────────────────────────────────
 ruff==0.8.4
 bandit==1.8.0
-asgi-lifespan==2.1.0
+pip-audit==2.9.0

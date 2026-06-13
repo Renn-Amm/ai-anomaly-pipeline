@@ -1,12 +1,13 @@
 """Anomaly query endpoints — backed by SQLite/Postgres via SQLAlchemy."""
 
+from __future__ import annotations
+
 from datetime import datetime
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AnomalyORM, get_session
@@ -23,7 +24,7 @@ class AnomalyOut(BaseModel):
     timestamp: datetime
     anomaly_type: AnomalyType
     severity: Severity
-    score: Optional[float] = None
+    score: float | None = None
     description: str
     resolution_hint: str
 
@@ -32,32 +33,33 @@ class AnomalyOut(BaseModel):
 
 class AnomalyListResponse(BaseModel):
     total: int
-    items: List[AnomalyOut]
+    items: list[AnomalyOut]
 
 
 @router.get("/anomalies", response_model=AnomalyListResponse)
 async def list_anomalies(
-    severity: Optional[Severity] = Query(None, description="Filter by severity"),
-    metric_name: Optional[str] = Query(None, max_length=128),
+    severity: Severity | None = Query(None, description="Filter by severity"),
+    metric_name: str | None = Query(None, max_length=128),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
-):
-    """
-    Retrieve previously detected anomalies, newest first.
-    Filter by severity and/or metric_name; paginate with limit/offset.
-    """
-    stmt = select(AnomalyORM).order_by(AnomalyORM.created_at.desc())
-
+) -> AnomalyListResponse:
+    """Retrieve detected anomalies, newest first. Filter and paginate."""
+    filters = []
     if severity is not None:
-        stmt = stmt.where(AnomalyORM.severity == severity.value)
+        filters.append(AnomalyORM.severity == severity.value)
     if metric_name is not None:
-        stmt = stmt.where(AnomalyORM.metric_name == metric_name)
+        filters.append(AnomalyORM.metric_name == metric_name)
 
-    total = len((await session.execute(stmt)).scalars().all())
+    count_stmt = select(func.count(AnomalyORM.id))
+    for f in filters:
+        count_stmt = count_stmt.where(f)
+    total = (await session.execute(count_stmt)).scalar_one()
 
-    stmt = stmt.limit(limit).offset(offset)
-    rows = (await session.execute(stmt)).scalars().all()
+    stmt = select(AnomalyORM).order_by(AnomalyORM.created_at.desc())
+    for f in filters:
+        stmt = stmt.where(f)
+    rows = (await session.execute(stmt.limit(limit).offset(offset))).scalars().all()
 
     items = [
         AnomalyOut(
