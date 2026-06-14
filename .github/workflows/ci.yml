@@ -25,13 +25,13 @@ jobs:
           cache: pip
 
       - name: Install linting deps
-        run: pip install ruff
-
-      - name: Ruff lint
-        run: ruff check app tests
+        run: pip install ruff==0.8.4
 
       - name: Ruff format check
         run: ruff format --check app tests
+
+      - name: Ruff lint
+        run: ruff check app tests
 
   # ── Security Scan ─────────────────────────────────────────────────────────────
   security:
@@ -57,7 +57,7 @@ jobs:
           bandit -r app -ll -ii --skip B104
 
       - name: pip-audit (dependency vulnerabilities)
-        run: pip-audit -r requirements.txt --ignore-vuln PYSEC-2022-42969
+        run: pip-audit -r requirements.txt
 
       - name: Upload bandit report
         if: always()
