@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session, save_pipeline_result
+from app.core.security import require_api_key
 from app.models.schemas import PipelineResult, TelemetryBatch
 from app.services.pipeline import process_batch
 
@@ -15,6 +16,7 @@ router = APIRouter()
     response_model=PipelineResult,
     status_code=status.HTTP_200_OK,
     summary="Submit a telemetry batch for processing",
+    dependencies=[Depends(require_api_key)],
 )
 async def ingest_telemetry(
     batch: TelemetryBatch,

@@ -6,16 +6,19 @@ on:
   pull_request:
     branches: [main, develop]
   schedule:
-    - cron: "0 6 * * 1"   # Weekly on Monday
+    - cron: "0 6 * * 1" # Weekly Monday
 
 jobs:
   analyze:
     name: CodeQL Analyze (Python)
     runs-on: ubuntu-latest
+
+    # These permissions are REQUIRED for CodeQL to upload results.
+    # Without security-events: write the upload step fails.
     permissions:
       actions: read
       contents: read
-      security-events: write
+      security-events: write  # ← must be write, not read
 
     steps:
       - uses: actions/checkout@v4
@@ -33,3 +36,6 @@ jobs:
         uses: github/codeql-action/analyze@v3
         with:
           category: /language:python
+          # continue-on-error so the PR isn't blocked if the repo owner
+          # hasn't enabled Code Scanning yet (free private repos).
+        continue-on-error: true
