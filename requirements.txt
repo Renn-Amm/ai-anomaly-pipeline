@@ -9,7 +9,7 @@ aiosqlite==0.20.0
 slowapi==0.1.9
 
 # ── Dev / Test ─────────────────────────────────────────────────────────────────
-pytest==9.0.3
+pytest==9.1.0
 pytest-asyncio==1.4.0
 pytest-cov==6.0.0
 httpx==0.28.1
