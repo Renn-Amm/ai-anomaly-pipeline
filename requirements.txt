@@ -11,7 +11,7 @@ slowapi==0.1.9
 # ── Dev / Test ─────────────────────────────────────────────────────────────────
 pytest==9.0.3
 pytest-asyncio==1.4.0
-pytest-cov==6.0.0
+pytest-cov==7.1.0
 httpx==0.28.1
 anyio==4.7.0
 asgi-lifespan==2.1.0
