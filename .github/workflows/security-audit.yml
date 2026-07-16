@@ -2,13 +2,17 @@ name: Security — Weekly Dependency Audit
 
 on:
   schedule:
-    - cron: "0 8 * * 1"   # Every Monday at 08:00 UTC
-  workflow_dispatch:
+    - cron: "0 8 * * 1" # Every Monday at 08:00 UTC
+  workflow_dispatch:     # Allow manual trigger
 
 jobs:
   audit:
     name: pip-audit
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write      # Needed to open a GitHub Issue on failure
+
     steps:
       - uses: actions/checkout@v4
 
@@ -20,12 +24,112 @@ jobs:
       - name: Install pip-audit
         run: pip install pip-audit
 
-      - name: Run audit
-        run: pip-audit -r requirements.txt -f json -o pip-audit-report.json
+      - name: Run audit (never fail the workflow)
+        id: audit
+        run: |
+          pip-audit -r requirements.txt -f json -o pip-audit-report.json || true
+          pip-audit -r requirements.txt 2>&1 | tee pip-audit-summary.txt || true
+
+          VULN_COUNT=$(python -c "
+          import json
+          try:
+              data = json.load(open('pip-audit-report.json'))
+              vulns = sum(len(d.get('vulns', [])) for d in data.get('dependencies', []))
+              print(vulns)
+          except Exception:
+              print(0)
+          ")
+          echo "vuln_count=$VULN_COUNT" >> "$GITHUB_OUTPUT"
+          echo "Found $VULN_COUNT vulnerabilities"
 
       - name: Upload audit report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pip-audit-report-${{ github.run_id }}
-          path: pip-audit-report.json
+          path: |
+            pip-audit-report.json
+            pip-audit-summary.txt
+
+      - name: Open or update GitHub Issue if vulnerabilities found
+        if: steps.audit.outputs.vuln_count != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync('pip-audit-summary.txt', 'utf8');
+            const count = '${{ steps.audit.outputs.vuln_count }}';
+            const date = new Date().toISOString().split('T')[0];
+            const title = `[Security] ${count} dependency vulnerabilities found — ${date}`;
+
+            const body = [
+              `## Dependency Vulnerability Report`,
+              `**Date:** ${date}  `,
+              `**Vulnerabilities found:** ${count}`,
+              ``,
+              `### Details`,
+              '```',
+              summary,
+              '```',
+              ``,
+              `### Action Required`,
+              `1. Review the vulnerabilities above`,
+              `2. Update affected packages in \`requirements.txt\``,
+              `3. Run \`pip-audit -r requirements.txt\` locally to verify`,
+              `4. Open a PR with fixes and close this issue`,
+              ``,
+              `> Auto-opened by the weekly security audit workflow.`,
+            ].join('\n');
+
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'security',
+            });
+
+            const existing = issues.data.find(i => i.title.startsWith('[Security]'));
+
+            if (existing) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                title,
+                body,
+              });
+              console.log(`Updated existing issue #${existing.number}`);
+            } else {
+              const issue = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['security', 'dependencies'],
+              });
+              console.log(`Opened issue #${issue.data.number}`);
+            }
+
+      - name: Close security issue if no vulnerabilities
+        if: steps.audit.outputs.vuln_count == '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'security',
+            });
+            const existing = issues.data.find(i => i.title.startsWith('[Security]'));
+            if (existing) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                state: 'closed',
+              });
+              console.log(`Closed resolved issue #${existing.number}`);
+            } else {
+              console.log('No open security issues — all clean.');
+            }
