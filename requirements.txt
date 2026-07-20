@@ -17,6 +17,6 @@ anyio==4.7.0
 asgi-lifespan==2.1.0
 
 # ── Linting / Security ────────────────────────────────────────────────────────
-ruff==0.8.4
+ruff==0.15.22
 bandit==1.8.0
 pip-audit==2.9.0
